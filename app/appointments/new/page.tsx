@@ -65,8 +65,16 @@ export default function NewAppointmentPage() {
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                        <User className="h-6 w-6 text-blue-600" />
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center bg-blue-100 overflow-hidden">
+                        {doctor.photo ? (
+                          <img
+                            src={doctor.photo}
+                            alt={doctor.name}
+                            className="object-cover w-12 h-12 rounded-full"
+                          />
+                        ) : (
+                          <User className="h-6 w-6 text-blue-600" />
+                        )}
                       </div>
                       <div>
                         <CardTitle className="text-lg">{doctor.name}</CardTitle>
