@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { User, Clock } from "lucide-react"
 import type { Doctor } from "@/types"
+import ProfileCard from "@/components/profile/ProfileCard"
 
 export default function NewAppointmentPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([])
@@ -52,51 +53,27 @@ export default function NewAppointmentPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Doctor Selection */}
-          <div className="space-y-6">
+          <div className="space-y-6 max-w-xs">
             <h2 className="text-xl font-semibold">Select a Doctor</h2>
             {doctors.map((doctor) => (
-              <Card
+              <div
                 key={doctor.id}
-                className={`cursor-pointer transition-all ${
+                className={`cursor-pointer transition-all w-full ${
                   selectedDoctor?.id === doctor.id ? "ring-2 ring-blue-500 bg-blue-50" : "hover:shadow-md"
-                }`}
+                } rounded-2xl mb-4`}
+                style={{ maxWidth: 320 }}
                 onClick={() => setSelectedDoctor(doctor)}
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center bg-blue-100 overflow-hidden">
-                        {doctor.photo ? (
-                          <img
-                            src={doctor.photo}
-                            alt={doctor.name}
-                            className="object-cover w-12 h-12 rounded-full"
-                          />
-                        ) : (
-                          <User className="h-6 w-6 text-blue-600" />
-                        )}
-                      </div>
-                      <div>
-                        <CardTitle className="text-lg">{doctor.name}</CardTitle>
-                        <Badge variant="secondary">{doctor.specialization}</Badge>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-green-600">₹{doctor.consultationFee}</div>
-                      <div className="text-sm text-gray-500">Consultation</div>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {doctor.experience && (
-                    <div className="flex items-center text-sm text-gray-600 mb-2">
-                      <Clock className="h-4 w-4 mr-1" />
-                      {doctor.experience} experience
-                    </div>
-                  )}
-                  {doctor.about && <p className="text-sm text-gray-600 line-clamp-2">{doctor.about}</p>}
-                </CardContent>
-              </Card>
+                <ProfileCard
+                  name={doctor.name}
+                  subtitle={doctor.specialization}
+                  photo={doctor.photo}
+                  stats={[
+                    { icon: <span className="text-green-600 font-bold">₹</span>, value: doctor.consultationFee },
+                  ]}
+                  className="w-full"
+                />
+              </div>
             ))}
           </div>
 
