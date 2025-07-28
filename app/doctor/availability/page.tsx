@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Plus, Calendar, Clock } from "lucide-react"
+import { Trash2, Plus, Calendar, Clock, Pencil, X, Check } from "lucide-react"
 
 export default function DoctorAvailabilityPage() {
   const [slots, setSlots] = useState<Availability[]>([])
@@ -16,8 +16,10 @@ export default function DoctorAvailabilityPage() {
   const [error, setError] = useState("")
   const [date, setDate] = useState("")
   const [timeSlots, setTimeSlots] = useState<string[]>([])
-  const [newTime, setNewTime] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTimeSlots, setEditTimeSlots] = useState<string[]>([])
+  const [editSubmitting, setEditSubmitting] = useState(false)
 
   useEffect(() => {
     async function fetchAvailability() {
@@ -46,10 +48,45 @@ export default function DoctorAvailabilityPage() {
   const today = new Date()
   const maxDate = addDays(today, 13)
 
-  const handleAddTimeSlot = () => {
-    if (newTime && !timeSlots.includes(newTime)) {
-      setTimeSlots([...timeSlots, newTime])
-      setNewTime("")
+  const handleEditSlot = (slotId: string, currentTimeSlots: string[]) => {
+    setEditingId(slotId)
+    setEditTimeSlots([...currentTimeSlots])
+    setError("")
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setEditTimeSlots([])
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return
+    setEditSubmitting(true)
+    setError("")
+    try {
+      const token = localStorage.getItem("token")
+      const res = await fetch(`/api/doctor/availability?id=${editingId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ timeSlots: editTimeSlots }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setSlots(slots.map((slot) => 
+          slot.id === editingId ? { ...slot, timeSlots: editTimeSlots } : slot
+        ))
+        setEditingId(null)
+        setEditTimeSlots([])
+      } else {
+        setError(data.error || "Failed to update availability")
+      }
+    } catch (e) {
+      setError("Network error")
+    } finally {
+      setEditSubmitting(false)
     }
   }
 
@@ -220,33 +257,116 @@ export default function DoctorAvailabilityPage() {
             <div className="space-y-4">
               {slots.map((slot) => (
                 <div key={slot.id} className="border rounded-lg p-4 bg-gray-50">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="font-semibold text-lg text-gray-900">
-                        {format(new Date(slot.date), "EEEE, MMMM dd, yyyy")}
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {slot.timeSlots.map((time) => (
-                          <Badge key={time} variant="outline">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="font-semibold text-lg text-gray-900">
+                      {format(new Date(slot.date), "EEEE, MMMM dd, yyyy")}
+                    </div>
+                    <div className="flex gap-2">
+                      {editingId !== slot.id && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditSlot(slot.id, slot.timeSlots)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteSlot(slot.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {editingId === slot.id ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                        {generateTimeSlots("08:00", "20:00", 30).map((time) => (
+                          <button
+                            key={time}
+                            type="button"
+                            className={`px-3 py-2 rounded border text-sm font-medium transition-colors ${
+                              editTimeSlots.includes(time)
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white text-gray-800 border-gray-300 hover:bg-blue-50"
+                            }`}
+                            onClick={() => {
+                              if (editTimeSlots.includes(time)) {
+                                setEditTimeSlots(editTimeSlots.filter((t) => t !== time))
+                              } else {
+                                setEditTimeSlots([...editTimeSlots, time])
+                              }
+                            }}
+                          >
                             {time}
-                          </Badge>
+                          </button>
                         ))}
                       </div>
+                      
+                      {editTimeSlots.length > 0 && (
+                        <div>
+                          <p className="text-sm text-gray-600 mb-2">Selected time slots:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {editTimeSlots.map((time) => (
+                              <Badge key={time} variant="secondary">
+                                {time}
+                                <button
+                                  type="button"
+                                  onClick={() => setEditTimeSlots(editTimeSlots.filter((t) => t !== time))}
+                                  className="ml-2 text-red-500 hover:text-red-700"
+                                >
+                                  ×
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleSaveEdit}
+                          disabled={editSubmitting || editTimeSlots.length === 0}
+                          size="sm"
+                        >
+                          <Check className="h-4 w-4 mr-1" />
+                          {editSubmitting ? "Saving..." : "Save"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleCancelEdit}
+                          size="sm"
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleDeleteSlot(slot.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {slot.timeSlots.map((time) => (
+                        <Badge key={time} variant="outline">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {time}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+      
+      {error && (
+        <div className="mt-4 bg-red-50 border border-red-200 rounded-md p-3">
+          <p className="text-red-800 text-sm">{error}</p>
+        </div>
+      )}
     </div>
   )
 }

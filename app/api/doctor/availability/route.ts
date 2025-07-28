@@ -8,6 +8,10 @@ const availabilitySchema = z.object({
   timeSlots: z.array(z.string()),
 })
 
+const updateAvailabilitySchema = z.object({
+  timeSlots: z.array(z.string()),
+})
+
 // GET - Fetch doctor's availability
 export async function GET(request: NextRequest) {
   try {
@@ -89,6 +93,50 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ availability })
   } catch (error) {
     console.error("Error creating availability:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+// PATCH - Update availability time slots
+export async function PATCH(request: NextRequest) {
+  try {
+    const token = request.headers.get("authorization")?.replace("Bearer ", "")
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const payload = verifyToken(token)
+    if (!payload || payload.role !== "DOCTOR") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const availabilityId = searchParams.get("id")
+
+    if (!availabilityId) {
+      return NextResponse.json({ error: "Availability ID required" }, { status: 400 })
+    }
+
+    const body = await request.json()
+    const { timeSlots } = updateAvailabilitySchema.parse(body)
+
+    // Fetch the availability to ensure it belongs to the doctor
+    const existingAvailability = await prisma.availability.findUnique({
+      where: { id: availabilityId },
+    })
+
+    if (!existingAvailability || existingAvailability.doctorId !== payload.userId) {
+      return NextResponse.json({ error: "Unauthorized or not found" }, { status: 403 })
+    }
+
+    const updatedAvailability = await prisma.availability.update({
+      where: { id: availabilityId },
+      data: { timeSlots },
+    })
+
+    return NextResponse.json({ availability: updatedAvailability })
+  } catch (error) {
+    console.error("Error updating availability:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
