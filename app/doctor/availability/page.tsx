@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import { addDays, format } from "date-fns"
+import { generateTimeSlots } from "@/lib/time-utils"
 import { Availability } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -139,24 +140,27 @@ export default function DoctorAvailabilityPage() {
             </div>
 
             <div>
-              <Label className="text-sm font-medium">Add Time Slots</Label>
-              <div className="mt-2 flex gap-2">
-                <div className="relative flex-1">
-                  <Clock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    type="time"
-                    value={newTime}
-                    onChange={(e) => setNewTime(e.target.value)}
-                    className="pl-10"
-                    placeholder="Select time"
-                  />
-                </div>
-                <Button type="button" onClick={handleAddTimeSlot} variant="outline">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add
-                </Button>
+              <Label className="text-sm font-medium">Select Time Slots</Label>
+              <div className="mt-2 grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                {generateTimeSlots("08:00", "20:00", 30).map((slot) => (
+                  <button
+                    type="button"
+                    key={slot}
+                    className={`px-3 py-2 rounded border text-sm font-medium transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      timeSlots.includes(slot)
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-800 border-gray-300 hover:bg-blue-50"
+                    }`}
+                    onClick={() =>
+                      timeSlots.includes(slot)
+                        ? setTimeSlots(timeSlots.filter((t) => t !== slot))
+                        : setTimeSlots([...timeSlots, slot])
+                    }
+                  >
+                    {slot}
+                  </button>
+                ))}
               </div>
-              
               {timeSlots.length > 0 && (
                 <div className="mt-3">
                   <p className="text-sm text-gray-600 mb-2">Selected time slots:</p>
@@ -177,6 +181,7 @@ export default function DoctorAvailabilityPage() {
                 </div>
               )}
             </div>
+
 
             <Button
               type="submit"

@@ -113,11 +113,17 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Availability ID required" }, { status: 400 })
     }
 
+    // Fetch the availability to ensure it belongs to the doctor
+    const availability = await prisma.availability.findUnique({
+      where: { id: availabilityId },
+    })
+
+    if (!availability || availability.doctorId !== payload.userId) {
+      return NextResponse.json({ error: "Unauthorized or not found" }, { status: 403 })
+    }
+
     await prisma.availability.delete({
-      where: {
-        id: availabilityId,
-        doctorId: payload.userId, // Ensure doctor can only delete their own slots
-      },
+      where: { id: availabilityId },
     })
 
     return NextResponse.json({ message: "Availability deleted successfully" })
