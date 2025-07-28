@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  password     String
+  phone        String?
+  role         Role          @default(USER)
+  appointments Appointment[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@map("users")
+}
+
+model Doctor {
+  id             String         @id @default(uuid())
+  name           String
+  email          String         @unique
+  password       String
+  specialization String
+  experience     String?
+  photo          String?
+  about          String?
+  consultationFee Float         @default(500)
+  appointments   Appointment[]
+  availabilities Availability[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("doctors")
+}
+
+model Appointment {
+  id                    String            @id @default(uuid())
+  user                  User              @relation(fields: [userId], references: [id])
+  userId                String
+  doctor                Doctor            @relation(fields: [doctorId], references: [id])
+  doctorId              String
+  date                  DateTime
+  time                  String
+  type                  String            @default("consultation")
+  status                AppointmentStatus @default(BOOKED)
+  paymentId             String?
+  paymentStatus         PaymentStatus     @default(PENDING)
+  refundId              String?
+  amount                Float
+  isRescheduleRequested Boolean           @default(false)
+  rescheduleReason      String?
+  notes                 String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@map("appointments")
+}
+
+model Availability {
+  id        String   @id @default(uuid())
+  doctor    Doctor   @relation(fields: [doctorId], references: [id])
+  doctorId  String
+  date      DateTime
+  timeSlots String[] // ["10:00", "10:30", "11:00"]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([doctorId, date])
+  @@map("availabilities")
+}
+
+enum Role {
+  USER
+  DOCTOR
+  ADMIN
+}
+
+enum AppointmentStatus {
+  BOOKED
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
