@@ -77,3 +77,27 @@ export function generateCancellationEmail(
     </div>
   `
 }
+
+export function generateRescheduleConfirmationEmail(
+  patientName: string,
+  doctorName: string,
+  date: string,
+  time: string,
+  amount: number,
+) {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #059669;">Appointment Rescheduled</h2>
+      <p>Dear ${patientName},</p>
+      <p>Your appointment has been successfully rescheduled:</p>
+      <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <p><strong>Doctor:</strong> ${doctorName}</p>
+        <p><strong>New Date:</strong> ${date}</p>
+        <p><strong>New Time:</strong> ${time}</p>
+        <p><strong>Amount:</strong> ₹${amount}</p>
+      </div>
+      <p>Please arrive 10 minutes before your scheduled time.</p>
+      <p>Best regards,<br>Healthcare Team</p>
+    </div>
+  `
+}
