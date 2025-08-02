@@ -7,7 +7,7 @@ const rescheduleSchema = z.object({
   reason: z.string().min(1),
 })
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const authResult = await requireAuth(["USER"])(request)
     if ("error" in authResult) {
@@ -17,9 +17,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const body = await request.json()
     const { reason } = rescheduleSchema.parse(body)
 
+    const { id } = await params
+
     const appointment = await prisma.appointment.findFirst({
       where: {
-        id: params.id,
+        id: id,
         userId: authResult.user.userId,
         status: "BOOKED",
       },
@@ -30,7 +32,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     const updatedAppointment = await prisma.appointment.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         isRescheduleRequested: true,
         rescheduleReason: reason,

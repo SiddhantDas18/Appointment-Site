@@ -69,6 +69,16 @@ export default function RescheduleSlotModal({
 
   const handleSubmit = () => {
     if (!selectedSlot) return
+    
+    // Check if trying to reschedule to the same date and time
+    const isSameDate = selectedDate.toISOString().split('T')[0] === initialDate.toISOString().split('T')[0]
+    const isSameSlot = selectedSlot === initialSlot
+    
+    if (isSameDate && isSameSlot) {
+      alert("Cannot reschedule to the same date and time. Please select a different slot.")
+      return
+    }
+    
     onSubmit(selectedDate, selectedSlot)
   }
 
@@ -99,16 +109,24 @@ export default function RescheduleSlotModal({
               </div>
             ) : localSlots.length > 0 ? (
               <div className="flex flex-wrap gap-2">
-                {localSlots.map((slot) => (
-                  <Button
-                    key={slot}
-                    variant={selectedSlot === slot ? "default" : "outline"}
-                    onClick={() => setSelectedSlot(slot)}
-                    size="sm"
-                  >
-                    {slot}
-                  </Button>
-                ))}
+                {localSlots.map((slot) => {
+                  const isSameDate = selectedDate.toISOString().split('T')[0] === initialDate.toISOString().split('T')[0]
+                  const isCurrentSlot = isSameDate && slot === initialSlot
+                  const isSelected = selectedSlot === slot
+                  
+                  return (
+                    <Button
+                      key={slot}
+                      variant={isSelected ? "default" : "outline"}
+                      onClick={() => setSelectedSlot(slot)}
+                      size="sm"
+                      className={isCurrentSlot ? "border-yellow-500 bg-yellow-50 text-yellow-800" : ""}
+                      title={isCurrentSlot ? "Current appointment time" : ""}
+                    >
+                      {slot} {isCurrentSlot && "(Current)"}
+                    </Button>
+                  )
+                })}
               </div>
             ) : (
               <p className="text-sm text-gray-500 py-4">No slots available for this date</p>

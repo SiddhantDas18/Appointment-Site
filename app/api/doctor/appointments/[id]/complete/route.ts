@@ -6,7 +6,7 @@ const prisma = new PrismaClient()
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.headers.get("authorization")?.replace("Bearer ", "")
@@ -19,7 +19,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Only doctors can mark appointments as completed" }, { status: 403 })
     }
 
-    const appointmentId = params.id
+    const { id: appointmentId } = await params
 
     // Find the appointment and verify it belongs to this doctor
     const appointment = await prisma.appointment.findUnique({

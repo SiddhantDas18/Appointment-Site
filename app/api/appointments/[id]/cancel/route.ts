@@ -4,16 +4,18 @@ import { requireAuth } from "@/lib/auth"
 import { createRefund } from "@/lib/razorpay"
 import { sendEmail, generateCancellationEmail } from "@/lib/email"
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const authResult = await requireAuth(["USER"])(request)
     if ("error" in authResult) {
       return NextResponse.json(authResult, { status: authResult.status })
     }
 
+    const { id } = await params
+
     const appointment = await prisma.appointment.findFirst({
       where: {
-        id: params.id,
+        id: id,
         userId: authResult.user.userId,
         status: "BOOKED",
       },
@@ -35,14 +37,14 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     let refundId = null
     if (appointment.paymentId && appointment.paymentStatus === "PAID") {
       const refundResult = await createRefund(appointment.paymentId)
-      if (refundResult.success) {
+      if (refundResult.success && refundResult.refund) {
         refundId = refundResult.refund.id
       }
     }
 
     // Update appointment status
     const updatedAppointment = await prisma.appointment.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         status: "CANCELLED",
         paymentStatus: refundId ? "REFUNDED" : appointment.paymentStatus,
@@ -50,25 +52,41 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       },
     })
 
-    // Add the slot back to availability
-    await prisma.availability.upsert({
+    // Add the slot back to availability (avoid duplicates)
+    const existingAvailability = await prisma.availability.findUnique({
       where: {
         doctorId_date: {
           doctorId: appointment.doctorId,
           date: appointment.date,
         },
       },
-      update: {
-        timeSlots: {
-          push: appointment.time,
-        },
-      },
-      create: {
-        doctorId: appointment.doctorId,
-        date: appointment.date,
-        timeSlots: [appointment.time],
-      },
     })
+
+    if (existingAvailability) {
+      // Only add the slot if it's not already there
+      if (!existingAvailability.timeSlots.includes(appointment.time)) {
+        await prisma.availability.update({
+          where: {
+            doctorId_date: {
+              doctorId: appointment.doctorId,
+              date: appointment.date,
+            },
+          },
+          data: {
+            timeSlots: [...existingAvailability.timeSlots, appointment.time].sort(),
+          },
+        })
+      }
+    } else {
+      // Create new availability record
+      await prisma.availability.create({
+        data: {
+          doctorId: appointment.doctorId,
+          date: appointment.date,
+          timeSlots: [appointment.time],
+        },
+      })
+    }
 
     // Send cancellation emails
     const emailHtml = generateCancellationEmail(

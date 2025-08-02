@@ -9,7 +9,7 @@ const rescheduleSchema = z.object({
   time: z.string(),
 })
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const token = request.headers.get("authorization")?.replace("Bearer ", "")
     if (!token) {
@@ -24,10 +24,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const body = await request.json()
     const { date, time } = rescheduleSchema.parse(body)
 
+    const { id } = await params
+
     // Find the appointment and ensure it belongs to the doctor
     const appointment = await prisma.appointment.findFirst({
       where: {
-        id: params.id,
+        id: id,
         doctorId: payload.userId,
         status: "BOOKED",
       },
@@ -46,6 +48,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     const newDate = new Date(date)
+    
+    // Check if trying to reschedule to the same date and time
+    const isSameDateTime = appointment.date.toISOString().split('T')[0] === newDate.toISOString().split('T')[0] && appointment.time === time
+    if (isSameDateTime) {
+      return NextResponse.json({ error: "Cannot reschedule to the same date and time" }, { status: 400 })
+    }
 
     // Check if the new slot is available
     const availability = await prisma.availability.findFirst({
@@ -66,7 +74,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         date: newDate,
         time,
         status: { not: "CANCELLED" },
-        id: { not: params.id },
+        id: { not: id },
       },
     })
 
@@ -74,59 +82,78 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: "New time slot is already booked" }, { status: 400 })
     }
 
-    // Free up the old slot
-    await prisma.availability.upsert({
-      where: {
-        doctorId_date: {
-          doctorId: payload.userId,
-          date: appointment.date,
+    // Use a transaction to ensure data consistency
+    const updatedAppointment = await prisma.$transaction(async (tx) => {
+      // Free up the old slot by adding it back to availability
+      const oldAvailability = await tx.availability.findUnique({
+        where: {
+          doctorId_date: {
+            doctorId: payload.userId,
+            date: appointment.date,
+          },
         },
-      },
-      update: {
-        timeSlots: {
-          push: appointment.time,
-        },
-      },
-      create: {
-        doctorId: payload.userId,
-        date: appointment.date,
-        timeSlots: [appointment.time],
-      },
-    })
+      })
 
-    // Remove the new slot from availability
-    await prisma.availability.update({
-      where: {
-        doctorId_date: {
-          doctorId: payload.userId,
+      if (oldAvailability) {
+        // Add the old slot back if it's not already there
+        const updatedOldSlots = oldAvailability.timeSlots.includes(appointment.time) 
+          ? oldAvailability.timeSlots 
+          : [...oldAvailability.timeSlots, appointment.time].sort()
+        
+        await tx.availability.update({
+          where: {
+            doctorId_date: {
+              doctorId: payload.userId,
+              date: appointment.date,
+            },
+          },
+          data: {
+            timeSlots: updatedOldSlots,
+          },
+        })
+      } else {
+        // Create availability for the old date if it doesn't exist
+        await tx.availability.create({
+          data: {
+            doctorId: payload.userId,
+            date: appointment.date,
+            timeSlots: [appointment.time],
+          },
+        })
+      }
+
+      // Remove the new slot from availability
+      await tx.availability.update({
+        where: {
+          doctorId_date: {
+            doctorId: payload.userId,
+            date: newDate,
+          },
+        },
+        data: {
+          timeSlots: availability.timeSlots.filter((slot) => slot !== time),
+        },
+      })
+
+      // Update the appointment
+      return await tx.appointment.update({
+        where: { id: id },
+        data: {
           date: newDate,
+          time,
+          isRescheduleRequested: false,
+          rescheduleReason: null,
+          status: "BOOKED",
         },
-      },
-      data: {
-        timeSlots: {
-          set: availability.timeSlots.filter((slot) => slot !== time),
+        include: {
+          user: {
+            select: { name: true, email: true },
+          },
+          doctor: {
+            select: { name: true, email: true },
+          },
         },
-      },
-    })
-
-    // Update the appointment
-    const updatedAppointment = await prisma.appointment.update({
-      where: { id: params.id },
-      data: {
-        date: newDate,
-        time,
-        isRescheduleRequested: false,
-        rescheduleReason: null,
-        status: "BOOKED",
-      },
-      include: {
-        user: {
-          select: { name: true, email: true },
-        },
-        doctor: {
-          select: { name: true, email: true },
-        },
-      },
+      })
     })
 
     // Send confirmation emails
