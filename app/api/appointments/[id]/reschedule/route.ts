@@ -5,6 +5,8 @@ import { z } from "zod"
 
 const rescheduleSchema = z.object({
   reason: z.string().min(1),
+  newDate: z.string(),
+  newTime: z.string(),
 })
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -15,7 +17,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const body = await request.json()
-    const { reason } = rescheduleSchema.parse(body)
+    const { reason, newDate, newTime } = rescheduleSchema.parse(body)
 
     const { id } = await params
 
@@ -31,16 +33,84 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Appointment not found or cannot be rescheduled" }, { status: 404 })
     }
 
+    // Check if new slot is available
+    const newSlotDate = new Date(newDate)
+    const availability = await prisma.availability.findUnique({
+      where: {
+        doctorId_date: {
+          doctorId: appointment.doctorId,
+          date: newSlotDate,
+        },
+      },
+    })
+
+    if (!availability || !availability.timeSlots.includes(newTime)) {
+      return NextResponse.json({ error: "Selected time slot is not available" }, { status: 400 })
+    }
+
+    // Free up old slot
+    const oldAvailability = await prisma.availability.findUnique({
+      where: {
+        doctorId_date: {
+          doctorId: appointment.doctorId,
+          date: appointment.date,
+        },
+      },
+    })
+
+    if (oldAvailability) {
+      const sortedSlots = [...oldAvailability.timeSlots, appointment.time]
+        .sort((a, b) => {
+          const [aHour, aMin] = a.split(':').map(Number)
+          const [bHour, bMin] = b.split(':').map(Number)
+          return (aHour * 60 + aMin) - (bHour * 60 + bMin)
+        })
+      
+      await prisma.availability.update({
+        where: {
+          doctorId_date: {
+            doctorId: appointment.doctorId,
+            date: appointment.date,
+          },
+        },
+        data: { timeSlots: sortedSlots },
+      })
+    } else {
+      await prisma.availability.create({
+        data: {
+          doctorId: appointment.doctorId,
+          date: appointment.date,
+          timeSlots: [appointment.time],
+        },
+      })
+    }
+
+    // Remove new slot from availability
+    await prisma.availability.update({
+      where: {
+        doctorId_date: {
+          doctorId: appointment.doctorId,
+          date: newSlotDate,
+        },
+      },
+      data: {
+        timeSlots: availability.timeSlots.filter(slot => slot !== newTime),
+      },
+    })
+
+    // Update appointment
     const updatedAppointment = await prisma.appointment.update({
       where: { id: id },
       data: {
-        isRescheduleRequested: true,
+        date: newSlotDate,
+        time: newTime,
+        status: "RESCHEDULED",
         rescheduleReason: reason,
       },
     })
 
     return NextResponse.json({
-      message: "Reschedule request submitted successfully",
+      message: "Appointment rescheduled successfully",
       appointment: updatedAppointment,
     })
   } catch (error) {

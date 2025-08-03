@@ -63,8 +63,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     })
 
     if (existingAvailability) {
-      // Only add the slot if it's not already there
       if (!existingAvailability.timeSlots.includes(appointment.time)) {
+        const sortedSlots = [...existingAvailability.timeSlots, appointment.time]
+          .sort((a, b) => {
+            const [aHour, aMin] = a.split(':').map(Number)
+            const [bHour, bMin] = b.split(':').map(Number)
+            return (aHour * 60 + aMin) - (bHour * 60 + bMin)
+          })
+        
         await prisma.availability.update({
           where: {
             doctorId_date: {
@@ -72,13 +78,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
               date: appointment.date,
             },
           },
-          data: {
-            timeSlots: [...existingAvailability.timeSlots, appointment.time].sort(),
-          },
+          data: { timeSlots: sortedSlots },
         })
       }
     } else {
-      // Create new availability record
       await prisma.availability.create({
         data: {
           doctorId: appointment.doctorId,
